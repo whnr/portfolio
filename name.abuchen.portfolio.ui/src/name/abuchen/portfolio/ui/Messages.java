@@ -654,9 +654,11 @@ public class Messages extends NLS
     public static String LabelCompleted;
     public static String LabelConfigureSharpeRatioRisklessIRR;
     public static String LabelConsumerPriceIndex;
+    public static String LabelAutoPopulateDividendShares;
     public static String LabelConvertBuySellIntoDeliveryTransactions;
     public static String LabelCopyToClipboard;
     public static String LabelCountry;
+    public static String TooltipAutoPopulateDividendShares;
     public static String LabelCreateAccountFirst;
     public static String LabelCrosshair;
     public static String LabelCurrencies;

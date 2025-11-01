@@ -4,6 +4,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 
 import org.junit.Test;
 
@@ -57,7 +58,8 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 100_00));
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert
@@ -99,7 +101,8 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 50_00));
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert: Should not modify existing shares
@@ -128,7 +131,8 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 100_00));
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert: Should remain 0
@@ -179,7 +183,8 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 100_00));
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert: Should handle gracefully
@@ -230,7 +235,8 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 150_00));
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert: Should calculate 150 shares held on Jan 15
@@ -281,7 +287,8 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 125_00));
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert: Should calculate 125 shares held on Jan 15
@@ -332,7 +339,8 @@ public class AutoPopulateDividendSharesActionTest
         buy2.insert(account, portfolio);
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert: Should only count 100 shares held on Jan 10, not the future 200
@@ -387,7 +395,8 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 150_00));
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert: Should calculate total of 150 shares across all portfolios
@@ -438,11 +447,109 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 120_00));
 
         // Execute
-        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client);
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptySet());
         Status status = action.process(dividend, account);
 
         // Assert
         assertThat(status.getCode(), is(Status.Code.OK));
         assertThat(dividend.getShares(), is(120 * Values.Share.factor()));
+    }
+
+    @Test
+    public void testActionDisabled()
+    {
+        // Setup: Create a client with holdings
+        Client client = new Client();
+        Security security = new Security("Apple Inc.", CurrencyUnit.USD);
+        client.addSecurity(security);
+
+        Account account = new Account("Brokerage Account");
+        account.setCurrencyCode(CurrencyUnit.USD);
+        client.addAccount(account);
+
+        Portfolio portfolio = new Portfolio("Stock Portfolio");
+        portfolio.setReferenceAccount(account);
+        client.addPortfolio(portfolio);
+
+        // Buy 100 shares
+        BuySellEntry buy = new BuySellEntry();
+        buy.setType(PortfolioTransaction.Type.BUY);
+        buy.setDate(LocalDateTime.parse("2024-01-01T00:00:00"));
+        buy.setShares(100 * Values.Share.factor());
+        buy.setMonetaryAmount(Money.of(CurrencyUnit.USD, 15000_00));
+        buy.setSecurity(security);
+        buy.insert(account, portfolio);
+
+        // Create dividend
+        AccountTransaction dividend = new AccountTransaction();
+        dividend.setType(AccountTransaction.Type.DIVIDENDS);
+        dividend.setDateTime(LocalDateTime.parse("2024-01-15T00:00:00"));
+        dividend.setSecurity(security);
+        dividend.setShares(0);
+        dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 100_00));
+
+        // Execute with action DISABLED
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, false,
+                        Collections.emptySet());
+        Status status = action.process(dividend, account);
+
+        // Assert: Shares should remain 0 because action is disabled
+        assertThat(status.getCode(), is(Status.Code.OK));
+        assertThat(dividend.getShares(), is(0L));
+    }
+
+    @Test
+    public void testExcludeTransactionsFromCurrentImport()
+    {
+        // Setup: Test that buy transactions from the same import are excluded
+        Client client = new Client();
+        Security security = new Security("Microsoft Corp.", CurrencyUnit.USD);
+        client.addSecurity(security);
+
+        Account account = new Account("Brokerage Account");
+        account.setCurrencyCode(CurrencyUnit.USD);
+        client.addAccount(account);
+
+        Portfolio portfolio = new Portfolio("Stock Portfolio");
+        portfolio.setReferenceAccount(account);
+        client.addPortfolio(portfolio);
+
+        // Existing holding: 50 shares on Jan 1
+        BuySellEntry existingBuy = new BuySellEntry();
+        existingBuy.setType(PortfolioTransaction.Type.BUY);
+        existingBuy.setDate(LocalDateTime.parse("2024-01-01T00:00:00"));
+        existingBuy.setShares(50 * Values.Share.factor());
+        existingBuy.setMonetaryAmount(Money.of(CurrencyUnit.USD, 5000_00));
+        existingBuy.setSecurity(security);
+        existingBuy.insert(account, portfolio);
+
+        // Import batch contains: buy of 100 shares on Jan 10 and dividend on Jan 15
+        BuySellEntry importedBuy = new BuySellEntry();
+        importedBuy.setType(PortfolioTransaction.Type.BUY);
+        importedBuy.setDate(LocalDateTime.parse("2024-01-10T00:00:00"));
+        importedBuy.setShares(100 * Values.Share.factor());
+        importedBuy.setMonetaryAmount(Money.of(CurrencyUnit.USD, 10000_00));
+        importedBuy.setSecurity(security);
+        // Note: NOT inserted into portfolio yet - this simulates being in the import
+
+        AccountTransaction dividend = new AccountTransaction();
+        dividend.setType(AccountTransaction.Type.DIVIDENDS);
+        dividend.setDateTime(LocalDateTime.parse("2024-01-15T00:00:00"));
+        dividend.setSecurity(security);
+        dividend.setShares(0);
+        dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 150_00));
+
+        // Create the exclusion set with the imported buy transaction
+        var transactionsToExclude = Collections.singleton(importedBuy.getPortfolioTransaction());
+
+        // Execute
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        transactionsToExclude);
+        Status status = action.process(dividend, account);
+
+        // Assert: Should only count the 50 existing shares, not the 100 shares from current import
+        assertThat(status.getCode(), is(Status.Code.OK));
+        assertThat(dividend.getShares(), is(50 * Values.Share.factor()));
     }
 }

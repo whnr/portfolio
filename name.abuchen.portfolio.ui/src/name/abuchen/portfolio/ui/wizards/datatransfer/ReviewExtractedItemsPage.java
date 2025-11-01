@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -77,6 +78,7 @@ import name.abuchen.portfolio.model.Portfolio;
 import name.abuchen.portfolio.model.PortfolioTransaction;
 import name.abuchen.portfolio.model.PortfolioTransferEntry;
 import name.abuchen.portfolio.model.Security;
+import name.abuchen.portfolio.model.Transaction;
 import name.abuchen.portfolio.money.Money;
 import name.abuchen.portfolio.money.Values;
 import name.abuchen.portfolio.ui.Images;
@@ -119,6 +121,12 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
     private static final String IMPORT_NOTES = "IMPORT_NOTES"; //$NON-NLS-1$
 
     /**
+     * Preference for the import wizard to automatically populate dividend
+     * share quantities
+     */
+    private static final String IMPORT_AUTO_POPULATE_DIVIDEND_SHARES = "IMPORT_AUTO_POPULATE_DIVIDEND_SHARES"; //$NON-NLS-1$
+
+    /**
      * If embedded into the CSV import, the first page can change the parsing
      * result and transactions must be extracted before every page. If embedded
      * into the PDF or XML import wizard, do not extract transactions again.
@@ -151,6 +159,7 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
     private Button cbConvertToDelivery;
     private Button cbRemoveDividends;
     private Button cbImportNotesFromSource;
+    private Button cbAutoPopulateDividendShares;
 
     private final Client client;
     private final Extractor extractor;
@@ -244,6 +253,12 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
         return cbImportNotesFromSource.getSelection();
     }
 
+    public boolean doAutoPopulateDividendShares()
+    {
+        return cbAutoPopulateDividendShares != null && cbAutoPopulateDividendShares.getVisible()
+                        && cbAutoPopulateDividendShares.getSelection();
+    }
+
     @Override
     public void createControl(Composite parent)
     {
@@ -288,6 +303,24 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
         var hasKey = preferences.contains(IMPORT_NOTES + extractor.getLabel());
         cbImportNotesFromSource.setSelection(!hasKey || preferences.getBoolean(IMPORT_NOTES + extractor.getLabel()));
 
+        cbAutoPopulateDividendShares = new Button(container, SWT.CHECK);
+        cbAutoPopulateDividendShares.setText(Messages.LabelAutoPopulateDividendShares);
+        cbAutoPopulateDividendShares.setToolTipText(Messages.TooltipAutoPopulateDividendShares);
+        cbAutoPopulateDividendShares.setSelection(
+                        preferences.getBoolean(IMPORT_AUTO_POPULATE_DIVIDEND_SHARES + extractor.getLabel()));
+        // Initially hidden - will be shown only if dividends without shares are detected
+        cbAutoPopulateDividendShares.setVisible(false);
+        // Re-check entries when checkbox is toggled
+        cbAutoPopulateDividendShares.addSelectionListener(new org.eclipse.swt.events.SelectionAdapter()
+        {
+            @Override
+            public void widgetSelected(org.eclipse.swt.events.SelectionEvent e)
+            {
+                checkEntries(allEntries);
+                tableViewer.refresh();
+            }
+        });
+
         Composite compositeTable = new Composite(container, SWT.NONE);
         Composite errorTable = new Composite(container, SWT.NONE);
 
@@ -299,7 +332,8 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
                         .top(new FormAttachment(0, 0)).left(new FormAttachment(0, 0)).right(new FormAttachment(100, 0))
                         .thenBelow(cbConvertToDelivery) //
                         .thenRight(cbRemoveDividends) //
-                        .thenRight(cbImportNotesFromSource);
+                        .thenRight(cbImportNotesFromSource) //
+                        .thenRight(cbAutoPopulateDividendShares);
 
         FormDataFactory.startingWith(cbConvertToDelivery) //
                         .thenBelow(compositeTable).right(targetContainer).bottom(new FormAttachment(80, 0)) //
@@ -843,6 +877,8 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
         preferences.setValue(IMPORT_CONVERT_BUYSELL_TO_DELIVERY + extractor.getLabel(), doConvertToDelivery());
         preferences.setValue(IMPORT_REMOVE_DIVIDENDS + extractor.getLabel(), doRemoveDividends());
         preferences.setValue(IMPORT_NOTES + extractor.getLabel(), doImportNotesFromSource());
+        preferences.setValue(IMPORT_AUTO_POPULATE_DIVIDEND_SHARES + extractor.getLabel(),
+                        doAutoPopulateDividendShares());
     }
 
     public void setAccount(Account account)
@@ -1017,12 +1053,68 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
 
     private void checkEntries(List<ExtractedEntry> entries)
     {
+        // Detect if there are dividends without share quantities
+        boolean hasDividendsWithoutShares = entries.stream().anyMatch(entry -> {
+            var item = entry.getItem();
+            if (item instanceof Extractor.TransactionItem ti)
+            {
+                if (ti.getSubject() instanceof AccountTransaction at)
+                {
+                    return at.getType() == AccountTransaction.Type.DIVIDENDS && at.getShares() == 0
+                                    && at.getSecurity() != null;
+                }
+            }
+            return false;
+        });
+
+        // Show/hide the checkbox based on whether dividends without shares exist
+        if (cbAutoPopulateDividendShares != null)
+        {
+            cbAutoPopulateDividendShares.setVisible(hasDividendsWithoutShares);
+            if (hasDividendsWithoutShares)
+            {
+                // Force layout update to show the checkbox
+                cbAutoPopulateDividendShares.getParent().layout(true, true);
+            }
+        }
+
+        // Collect all transactions from this import to exclude from calculations
+        Set<Transaction> transactionsToExclude = new HashSet<>();
+        for (ExtractedEntry entry : entries)
+        {
+            var item = entry.getItem();
+            if (item instanceof Extractor.TransactionItem ti)
+            {
+                if (ti.getSubject() instanceof Transaction t)
+                    transactionsToExclude.add(t);
+            }
+            else if (item instanceof Extractor.BuySellEntryItem bse)
+            {
+                BuySellEntry buySell = (BuySellEntry) bse.getSubject();
+                transactionsToExclude.add(buySell.getAccountTransaction());
+                transactionsToExclude.add(buySell.getPortfolioTransaction());
+            }
+            else if (item instanceof Extractor.AccountTransferItem ati)
+            {
+                AccountTransferEntry transfer = (AccountTransferEntry) ati.getSubject();
+                transactionsToExclude.add(transfer.getSourceTransaction());
+                transactionsToExclude.add(transfer.getTargetTransaction());
+            }
+            else if (item instanceof Extractor.PortfolioTransferItem pti)
+            {
+                PortfolioTransferEntry transfer = (PortfolioTransferEntry) pti.getSubject();
+                transactionsToExclude.add(transfer.getSourceTransaction());
+                transactionsToExclude.add(transfer.getTargetTransaction());
+            }
+        }
+
         List<ImportAction> actions = new ArrayList<>();
         actions.add(new CheckTransactionDateAction());
         actions.add(new CheckValidTypesAction());
         actions.add(new CheckSecurityRelatedValuesAction());
         actions.add(new DetectDuplicatesAction(client));
-        actions.add(new AutoPopulateDividendSharesAction(client));
+        actions.add(new AutoPopulateDividendSharesAction(client, doAutoPopulateDividendShares(),
+                        transactionsToExclude));
         actions.add(new CheckCurrenciesAction());
         actions.add(new CheckForexGrossValueAction());
 
