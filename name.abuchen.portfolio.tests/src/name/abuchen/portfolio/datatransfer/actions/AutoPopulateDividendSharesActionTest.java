@@ -59,7 +59,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert
@@ -102,7 +102,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert: Should not modify existing shares
@@ -132,7 +132,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert: Should remain 0
@@ -184,7 +184,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert: Should handle gracefully
@@ -236,7 +236,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert: Should calculate 150 shares held on Jan 15
@@ -288,7 +288,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert: Should calculate 125 shares held on Jan 15
@@ -340,7 +340,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert: Should only count 100 shares held on Jan 10, not the future 200
@@ -396,7 +396,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert: Should calculate total of 150 shares across all portfolios
@@ -448,7 +448,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert
@@ -491,7 +491,7 @@ public class AutoPopulateDividendSharesActionTest
 
         // Execute with action DISABLED
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, false,
-                        Collections.emptySet());
+                        Collections.emptyList());
         Status status = action.process(dividend, account);
 
         // Assert: Shares should remain 0 because action is disabled
@@ -500,9 +500,9 @@ public class AutoPopulateDividendSharesActionTest
     }
 
     @Test
-    public void testExcludeTransactionsFromCurrentImport()
+    public void testIncludeTransactionsFromCurrentImport()
     {
-        // Setup: Test that buy transactions from the same import are excluded
+        // Setup: Test that buy transactions from the same import ARE included
         Client client = new Client();
         Security security = new Security("Microsoft Corp.", CurrencyUnit.USD);
         client.addSecurity(security);
@@ -531,6 +531,7 @@ public class AutoPopulateDividendSharesActionTest
         importedBuy.setShares(100 * Values.Share.factor());
         importedBuy.setMonetaryAmount(Money.of(CurrencyUnit.USD, 10000_00));
         importedBuy.setSecurity(security);
+        importedBuy.setAccount(account);
         // Note: NOT inserted into portfolio yet - this simulates being in the import
 
         AccountTransaction dividend = new AccountTransaction();
@@ -540,16 +541,85 @@ public class AutoPopulateDividendSharesActionTest
         dividend.setShares(0);
         dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 150_00));
 
-        // Create the exclusion set with the imported buy transaction
-        var transactionsToExclude = Collections.singleton(importedBuy.getPortfolioTransaction());
+        // Create mock ExtractedEntry for the imported buy
+        var mockEntry = new name.abuchen.portfolio.ui.wizards.datatransfer.ReviewExtractedItemsPage.ExtractedEntry()
+        {
+            @Override
+            public name.abuchen.portfolio.datatransfer.Extractor.Item getItem()
+            {
+                return new name.abuchen.portfolio.datatransfer.Extractor.BuySellEntryItem(importedBuy);
+            }
+        };
 
-        // Execute
+        // Execute - passing the import entry so it's included in calculation
         AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
-                        transactionsToExclude);
+                        java.util.List.of(mockEntry));
         Status status = action.process(dividend, account);
 
-        // Assert: Should only count the 50 existing shares, not the 100 shares from current import
+        // Assert: Should count BOTH the 50 existing shares AND the 100 imported shares
         assertThat(status.getCode(), is(Status.Code.OK));
-        assertThat(dividend.getShares(), is(50 * Values.Share.factor()));
+        assertThat(dividend.getShares(), is(150 * Values.Share.factor()));
+    }
+
+    @Test
+    public void testAccountOverridePerTransaction()
+    {
+        // Setup: Test that we use the transaction-specific account, not default
+        Client client = new Client();
+        Security security = new Security("Amazon.com Inc.", CurrencyUnit.USD);
+        client.addSecurity(security);
+
+        // Create two accounts
+        Account accountFidelity = new Account("Fidelity");
+        accountFidelity.setCurrencyCode(CurrencyUnit.USD);
+        client.addAccount(accountFidelity);
+
+        Account accountSchwab = new Account("Schwab");
+        accountSchwab.setCurrencyCode(CurrencyUnit.USD);
+        client.addAccount(accountSchwab);
+
+        // Portfolios linked to different accounts
+        Portfolio portfolioFidelity = new Portfolio("Fidelity Portfolio");
+        portfolioFidelity.setReferenceAccount(accountFidelity);
+        client.addPortfolio(portfolioFidelity);
+
+        Portfolio portfolioSchwab = new Portfolio("Schwab Portfolio");
+        portfolioSchwab.setReferenceAccount(accountSchwab);
+        client.addPortfolio(portfolioSchwab);
+
+        // Holdings in Fidelity: 100 shares
+        BuySellEntry fidelityBuy = new BuySellEntry();
+        fidelityBuy.setType(PortfolioTransaction.Type.BUY);
+        fidelityBuy.setDate(LocalDateTime.parse("2024-01-01T00:00:00"));
+        fidelityBuy.setShares(100 * Values.Share.factor());
+        fidelityBuy.setMonetaryAmount(Money.of(CurrencyUnit.USD, 15000_00));
+        fidelityBuy.setSecurity(security);
+        fidelityBuy.insert(accountFidelity, portfolioFidelity);
+
+        // Holdings in Schwab: 200 shares
+        BuySellEntry schwabBuy = new BuySellEntry();
+        schwabBuy.setType(PortfolioTransaction.Type.BUY);
+        schwabBuy.setDate(LocalDateTime.parse("2024-01-01T00:00:00"));
+        schwabBuy.setShares(200 * Values.Share.factor());
+        schwabBuy.setMonetaryAmount(Money.of(CurrencyUnit.USD, 30000_00));
+        schwabBuy.setSecurity(security);
+        schwabBuy.insert(accountSchwab, portfolioSchwab);
+
+        // Dividend assigned to Schwab account (not Fidelity)
+        AccountTransaction dividend = new AccountTransaction();
+        dividend.setType(AccountTransaction.Type.DIVIDENDS);
+        dividend.setDateTime(LocalDateTime.parse("2024-01-15T00:00:00"));
+        dividend.setSecurity(security);
+        dividend.setShares(0);
+        dividend.setMonetaryAmount(Money.of(CurrencyUnit.USD, 200_00));
+
+        // Execute - passing accountSchwab (transaction-specific account)
+        AutoPopulateDividendSharesAction action = new AutoPopulateDividendSharesAction(client, true,
+                        Collections.emptyList());
+        Status status = action.process(dividend, accountSchwab);
+
+        // Assert: Should use Schwab's 200 shares, NOT Fidelity's 100 shares
+        assertThat(status.getCode(), is(Status.Code.OK));
+        assertThat(dividend.getShares(), is(200 * Values.Share.factor()));
     }
 }

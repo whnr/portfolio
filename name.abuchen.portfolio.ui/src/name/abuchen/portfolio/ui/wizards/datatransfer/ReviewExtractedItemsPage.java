@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1078,43 +1077,12 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
             }
         }
 
-        // Collect all transactions from this import to exclude from calculations
-        Set<Transaction> transactionsToExclude = new HashSet<>();
-        for (ExtractedEntry entry : entries)
-        {
-            var item = entry.getItem();
-            if (item instanceof Extractor.TransactionItem ti)
-            {
-                if (ti.getSubject() instanceof Transaction t)
-                    transactionsToExclude.add(t);
-            }
-            else if (item instanceof Extractor.BuySellEntryItem bse)
-            {
-                BuySellEntry buySell = (BuySellEntry) bse.getSubject();
-                transactionsToExclude.add(buySell.getAccountTransaction());
-                transactionsToExclude.add(buySell.getPortfolioTransaction());
-            }
-            else if (item instanceof Extractor.AccountTransferItem ati)
-            {
-                AccountTransferEntry transfer = (AccountTransferEntry) ati.getSubject();
-                transactionsToExclude.add(transfer.getSourceTransaction());
-                transactionsToExclude.add(transfer.getTargetTransaction());
-            }
-            else if (item instanceof Extractor.PortfolioTransferItem pti)
-            {
-                PortfolioTransferEntry transfer = (PortfolioTransferEntry) pti.getSubject();
-                transactionsToExclude.add(transfer.getSourceTransaction());
-                transactionsToExclude.add(transfer.getTargetTransaction());
-            }
-        }
-
         List<ImportAction> actions = new ArrayList<>();
         actions.add(new CheckTransactionDateAction());
         actions.add(new CheckValidTypesAction());
         actions.add(new CheckSecurityRelatedValuesAction());
         actions.add(new DetectDuplicatesAction(client));
-        actions.add(new AutoPopulateDividendSharesAction(client, doAutoPopulateDividendShares(),
-                        transactionsToExclude));
+        actions.add(new AutoPopulateDividendSharesAction(client, doAutoPopulateDividendShares(), entries));
         actions.add(new CheckCurrenciesAction());
         actions.add(new CheckForexGrossValueAction());
 
