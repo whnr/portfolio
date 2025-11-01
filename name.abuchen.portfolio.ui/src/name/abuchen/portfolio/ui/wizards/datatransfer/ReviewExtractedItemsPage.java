@@ -59,6 +59,7 @@ import name.abuchen.portfolio.datatransfer.Extractor;
 import name.abuchen.portfolio.datatransfer.Extractor.Item;
 import name.abuchen.portfolio.datatransfer.ImportAction;
 import name.abuchen.portfolio.datatransfer.ImportAction.Status.Code;
+import name.abuchen.portfolio.datatransfer.actions.AutoPopulateDividendSharesAction;
 import name.abuchen.portfolio.datatransfer.actions.CheckCurrenciesAction;
 import name.abuchen.portfolio.datatransfer.actions.CheckForexGrossValueAction;
 import name.abuchen.portfolio.datatransfer.actions.CheckSecurityRelatedValuesAction;
@@ -1021,6 +1022,7 @@ public class ReviewExtractedItemsPage extends AbstractWizardPage implements Impo
         actions.add(new CheckValidTypesAction());
         actions.add(new CheckSecurityRelatedValuesAction());
         actions.add(new DetectDuplicatesAction(client));
+        actions.add(new AutoPopulateDividendSharesAction(client));
         actions.add(new CheckCurrenciesAction());
         actions.add(new CheckForexGrossValueAction());
 
