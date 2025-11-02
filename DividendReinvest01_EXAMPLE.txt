@@ -1,0 +1,14 @@
+YOUR BROKER NAME
+Account Statement
+January 2024
+
+Account Number: XXXXXXX1234
+
+TRANSACTION HISTORY
+
+Date        Description                           Amount      Shares    Price
+01/15/2024  AAPL - DIVIDEND REINVESTED           $450.00     2.49      $180.50
+            Apple Inc. Common Stock
+            Dividend on 150 shares
+
+Account Total: $50,450.00

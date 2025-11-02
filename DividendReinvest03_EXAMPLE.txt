@@ -1,0 +1,22 @@
+YOUR BROKER NAME
+Account Statement
+January 2024
+
+Account Number: XXXXXXX1234
+
+TRANSACTION HISTORY
+
+Date        Description                           Amount      Shares    Price
+01/15/2024  AAPL - DIVIDEND REINVESTED           $450.00     2.49      $180.50
+            Apple Inc. Common Stock
+            Dividend on 150 shares
+
+01/15/2024  MSFT - DIVIDEND REINVESTED           $187.50     0.52      $360.00
+            Microsoft Corp.
+            Dividend on 75 shares
+
+01/15/2024  GOOGL - DIVIDEND REINVESTED          $250.00     1.79      $139.38
+            Alphabet Inc. Class A
+            Dividend on 50 shares
+
+Account Total: $51,337.50
